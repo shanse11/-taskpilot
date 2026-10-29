@@ -18,8 +18,10 @@ const developmentSecret = "taskpilot-local-development-secret-change-before-depl
 
 function jwtSecret(): string {
   const secret = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : developmentSecret);
-  if (secret.length < 32) {
-    throw new Error("JWT_SECRET must be at least 32 characters long");
+  const looksLikePlaceholder = /(change[-_ ]?me|replace[-_ ]?me|placeholder)/i.test(secret);
+  const hasEnoughDistinctCharacters = new Set(secret).size >= 12;
+  if (secret.length < 32 || (process.env.NODE_ENV === "production" && (looksLikePlaceholder || !hasEnoughDistinctCharacters))) {
+    throw new Error("JWT_SECRET must be a strong random secret of at least 32 characters; generate one for production");
   }
   return secret;
 }

@@ -19,13 +19,26 @@
 
 E2E 实际用例：未登录访问时显示登录页；设置测试令牌后可打开仪表盘，并检查导航、图表区、CSV 按钮、窄屏无横向溢出和主题切换。
 
-API Vitest 使用 Supertest 调用 Express 应用，并通过 Prisma/SQLite 检查认证、项目与任务 CRUD、跨用户隔离、统计口径和 CSV 内容。Web Vitest 在 jsdom 中运行。
+API Vitest 使用 Supertest 调用 Express 应用，并通过 Prisma/PostgreSQL 检查认证、项目与任务 CRUD、跨用户隔离、统计口径和 CSV 内容。Web Vitest 在 jsdom 中运行。
+
+## Render / PostgreSQL 适配后的复验（2026-10-29）
+
+在后续 Render 与 PostgreSQL 适配工作区再次运行，API 使用临时 PostgreSQL 16 实例：
+
+| 命令 | 结果摘要 |
+| --- | --- |
+| `npm run db:generate` | 成功，生成 Prisma Client。 |
+| `npm run db:migrate:deploy` | 成功，应用 PostgreSQL 初始迁移；迁移 SQL 只创建 schema、表、索引和外键。 |
+| `npm run build` | 成功，API TypeScript 构建和 Vite 生产构建通过。 |
+| `npm run test` | 成功。API：3 个文件、6 项测试；Web：1 个文件、3 项测试。 |
+
+另以生产环境变量启动 `npm start`，手动确认 `/api/health` 为 200、`/projects/deep-link` 回退到 HTML、构建 JS 静态文件为 200、未知 `/api/*` 返回 JSON 404。此次未重新运行 Playwright E2E，也未运行演示 seed。
 
 ## 已知限制
 
 - 仪表盘 Playwright 用例通过 `page.route("**/api/**", ...)` mock 所有 API 响应，并注入测试令牌。因此该 E2E 只验证 Web 路由和 UI 行为，不验证真实登录、Express API、数据库或端到端数据链路。未登录登录页用例也不提交登录表单。
 - 本次运行环境已具备可启动的 Chromium。新环境需先运行 `npx playwright install chromium`；Linux 若缺少系统库可用 `npx playwright install --with-deps chromium`。
-- 本次最终验证没有运行 `npm run db:push` 或 `npm run db:seed`。README 记录了这两项命令，但本报告不据此宣称实际数据库初始化或演示数据 seed 已验证。
+- 原始验证没有运行 `npm run db:push` 或 `npm run db:seed`；PostgreSQL 适配复验已运行 `prisma migrate deploy`，但没有运行演示 seed。
 - 本次结果不覆盖生产部署、CI 多平台运行、速率限制、安全响应头或数据库备份恢复验证。
 
 ## 相关实现提交

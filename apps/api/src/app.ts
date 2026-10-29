@@ -1,4 +1,6 @@
 import express from "express";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ErrorRequestHandler } from "express";
 import { apiRouter } from "./routes/index.js";
 
@@ -7,8 +9,9 @@ export const app = express();
 app.disable("x-powered-by");
 const allowedOrigins = new Set([
   "http://localhost:5173",
+  process.env.RENDER_EXTERNAL_URL,
   ...(process.env.CORS_ORIGIN ?? "").split(",").map((origin) => origin.trim()).filter(Boolean),
-]);
+].filter((origin): origin is string => Boolean(origin)));
 
 app.use((request, response, next) => {
   const origin = request.header("origin");
@@ -29,6 +32,27 @@ app.use((request, response, next) => {
 
 app.use(express.json());
 app.use("/api", apiRouter);
+
+app.use("/api", (request, response) => {
+  response.status(404).json({
+    error: "not_found",
+    message: `No route for ${request.method} ${request.path}`,
+  });
+});
+
+const webDistDirectory = [
+  resolve(process.cwd(), "apps/web/dist"),
+  resolve(process.cwd(), "../../apps/web/dist"),
+].find((candidate) => existsSync(resolve(candidate, "index.html")));
+
+if (webDistDirectory) {
+  app.use(express.static(webDistDirectory, { index: false }));
+  app.get(/^\/(?!api(?:\/|$)).*/, (_request, response, next) => {
+    response.sendFile(resolve(webDistDirectory, "index.html"), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 app.use((request, response) => {
   response.status(404).json({

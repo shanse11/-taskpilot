@@ -1,12 +1,12 @@
 # TaskPilot
 
-TaskPilot 是一个可在本地运行的项目与任务管理平台。它提供账号注册与登录、按用户隔离的项目管理、任务看板、统计仪表盘和 CSV 导出。应用使用 SQLite 保存数据，不依赖付费第三方 API 或云服务。
+TaskPilot 是一个可在本地运行或部署到 Render 的项目与任务管理平台。它提供账号注册与登录、按用户隔离的项目管理、任务看板、统计仪表盘和 CSV 导出。API 使用 Prisma 和 PostgreSQL 保存数据。
 
 ## 技术栈
 
 - Web：React 19、TypeScript、Vite、Tailwind CSS、React Router
 - API：Node.js、Express 5、TypeScript、Zod
-- 数据库：SQLite、Prisma 6
+- 数据库：PostgreSQL、Prisma 6
 - 认证：bcryptjs 密码哈希、HS256 JWT
 - 测试：Vitest、Supertest、Playwright
 
@@ -14,6 +14,7 @@ TaskPilot 是一个可在本地运行的项目与任务管理平台。它提供�
 
 - Node.js 20.19 或更高版本
 - npm 10 或更高版本
+- PostgreSQL 16 或更高版本（本地开发和 API 测试）
 - 运行 E2E 测试时还需要 Playwright Chromium 及其系统依赖
 
 ## 安装和启动
@@ -26,12 +27,17 @@ npm install
 cp apps/api/.env.example apps/api/.env
 ```
 
-`apps/api/.env.example` 提供本地 `PORT` 和 `JWT_SECRET`。本地默认 API 端口为 `4000`，Vite 开发服务器端口为 `5173`。SQLite 文件位于 `apps/api/prisma/dev.db`，由 `.gitignore` 排除。
+`apps/api/.env.example` 包含数据库 URL、JWT、CORS、应用 URL 和端口的本地模板。创建 PostgreSQL 用户和数据库（示例密码仅用于本机）：
 
-创建或同步本地数据库 schema：
+```sql
+CREATE USER taskpilot WITH PASSWORD 'taskpilot';
+CREATE DATABASE taskpilot OWNER taskpilot;
+```
+
+本地默认 API 端口为 `4000`，Vite 开发服务器端口为 `5173`。在 `apps/api/.env` 中按需调整 `DATABASE_URL`，然后应用迁移：
 
 ```bash
-npm run db:push
+npm run db:migrate:deploy
 ```
 
 然后启动 Web 和 API（在一个终端中运行）：
@@ -52,7 +58,7 @@ Seed 会创建两名演示用户、三个项目和五个任务，包含不同状
 SEED_USER_PASSWORD='choose-a-local-demo-password' npm run db:seed
 ```
 
-Seed 前先运行 `npm run db:push`。完成 seed 后，在登录页使用以下任一账号和刚才设置的密码：
+Seed 前先运行 `npm run db:migrate:deploy`。完成 seed 后，在登录页使用以下任一账号和刚才设置的密码：
 
 | 邮箱 | 用户名 |
 | --- | --- |
@@ -94,12 +100,20 @@ Seed 前先运行 `npm run db:push`。完成 seed 后，在登录页使用以下
 | `npm install` | 安装全部工作区依赖并生成 Prisma Client（npm 内置命令） |
 | `npm run dev` | 同时启动 API 和 Web 开发服务 |
 | `npm run build` | 构建 API 和 Web |
+| `npm start` | 启动生产 API，并托管 `apps/web/dist` |
 | `npm run test` | 运行 API 与 Web Vitest 测试 |
 | `npm run test:e2e` | 运行 Playwright Chromium 冒烟测试 |
 | `npm run db:generate` | 生成 Prisma Client |
-| `npm run db:push` | 将 Prisma schema 同步到本地 SQLite |
-| `npm run db:migrate` | 使用 Prisma Migrate 创建或应用迁移 |
+| `npm run db:push` | 将 Prisma schema 同步到本地 PostgreSQL（开发用途） |
+| `npm run db:migrate` | 使用 Prisma Migrate 创建开发迁移 |
+| `npm run db:migrate:deploy` | 将已提交的迁移应用到 PostgreSQL |
 | `npm run db:seed` | 写入演示数据；需要 `SEED_USER_PASSWORD` |
+
+## Render 部署
+
+仓库根目录的 `render.yaml` 定义了单一 Express Web Service 和 PostgreSQL。完整的 Blueprint、环境变量、DNS 和更新步骤见 [DEPLOY.md](./DEPLOY.md)。生产进程由 Express 同时提供 `/api/*`、静态 Web 资源和 SPA 路由回退。
+
+SQLite 备份文件保存在 `backups/` 且不会提交到仓库。PostgreSQL 迁移只创建 schema，不会自动复制 SQLite 备份里的用户或任务记录；需要迁移旧记录时应单独安排数据导入。
 
 ## 测试
 

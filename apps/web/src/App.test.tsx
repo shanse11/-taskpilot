@@ -67,7 +67,7 @@ describe("authentication screens", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "数据仪表盘" })).toBeTruthy());
-    expect(screen.getByText("任务总数")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("任务总数")).toBeTruthy());
     expect(screen.getByRole("region", { name: "按状态分布" })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/stats", expect.objectContaining({
       headers: expect.any(Headers),

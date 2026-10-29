@@ -2,7 +2,7 @@
 
 ## 系统结构
 
-TaskPilot 是由 npm workspaces 管理的 TypeScript monorepo。浏览器加载 Vite 提供的 React 应用，并通过 `/api` 请求访问 Express API；API 通过 Prisma Client 读写 SQLite。开发模式下 Vite 将 `/api` 代理到本地 API。
+TaskPilot 是由 npm workspaces 管理的 TypeScript monorepo。浏览器加载 Vite 提供的 React 应用，并通过 `/api` 请求访问 Express API；API 通过 Prisma Client 读写 PostgreSQL。开发模式下 Vite 将 `/api` 代理到本地 API，生产模式由 Express 提供构建后的 Web 文件和 SPA 回退。
 
 ```mermaid
 flowchart LR
@@ -12,7 +12,7 @@ flowchart LR
   Express --> Auth[JWT 身份校验]
   Auth --> Routes[认证、项目、任务、统计与导出路由]
   Routes --> Prisma[Prisma Client]
-  Prisma --> SQLite[(apps/api/prisma/dev.db)]
+  Prisma --> PostgreSQL[(DATABASE_URL)]
 ```
 
 开发时可用 `npm run dev` 同时启动前后端。Vite 配置了严格端口 `5173`，API 默认端口为 `4000`，可通过 `PORT` 修改 API 端口。API CORS 默认允许 `http://localhost:5173`，并可通过 `CORS_ORIGIN` 增加逗号分隔的来源。
@@ -24,7 +24,7 @@ apps/
   api/
     prisma/
       schema.prisma          User、Project、Task 数据模型
-      migrations/            初始 SQLite migration
+      migrations/            PostgreSQL migrations
       seed.ts                 演示账号、项目和任务
     src/
       routes/                 health、auth、projects、tasks、dashboard、export
@@ -47,7 +47,7 @@ DELIVERY_REPORT.md
 package.json                 npm workspaces 与根目录命令
 ```
 
-前后端只通过 HTTP/JSON API 通信，不共享运行时模型。SQLite 文件路径由 `apps/api/prisma/schema.prisma` 中的 `file:./dev.db` 决定。
+前后端只通过 HTTP/JSON API 通信，不共享运行时模型。Prisma 从 `DATABASE_URL` 读取 PostgreSQL 连接地址。生产迁移通过 `prisma migrate deploy` 应用。
 
 ## 数据模型
 
@@ -96,7 +96,7 @@ erDiagram
 | `Project` | 归属一个 `User`；状态约定为 `active` 或 `archived`；按 `(id, userId)` 暴露复合唯一键。 |
 | `Task` | 同时关联 `Project` 和 `User`；`(projectId, userId)` 复合外键确保项目与任务属于同一用户；含优先级、状态、可空截止日期和看板位置。 |
 
-SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以字符串存储，由 API 的 Zod schema 校验。任务状态为 `todo`、`in_progress`、`done`；优先级为 `low`、`medium`、`high`。用户、项目及任务关系均使用级联删除。
+状态和优先级以字符串存储，由 API 的 Zod schema 校验。任务状态为 `todo`、`in_progress`、`done`；优先级为 `low`、`medium`、`high`。用户、项目及任务关系均使用级联删除。
 
 ## API 路由
 
@@ -122,10 +122,10 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以字符串�
 ## 认证和数据安全
 
 - 注册密码使用 `bcryptjs` cost factor 12 哈希；密码不会出现在 API 响应中。
-- API 使用 HS256 JWT，包含 `userId`、`email` 和 `sub`，有效期为一小时。签名密钥来自 `JWT_SECRET`；密钥少于 32 个字符会被拒绝。生产模式没有设置密钥时 API 不会启动；开发模式可使用代码中的本地开发密钥。
+- API 使用 HS256 JWT，包含 `userId`、`email` 和 `sub`，有效期为一小时。签名密钥来自 `JWT_SECRET`；密钥少于 32 个字符会被拒绝，生产还会拒绝明显占位值和字符种类过少的密钥。生产模式没有有效密钥时 API 不会启动；开发模式可使用代码中的本地开发密钥。
 - Web 将令牌存入 `localStorage` 的 `taskpilot.accessToken`，刷新页面时通过 `/api/auth/me` 恢复登录态。当前为无状态 Bearer token：服务端不维护撤销表，退出时由客户端删除令牌。
-- API 对跨域请求校验来源；默认允许本地 Vite 地址，可通过 `CORS_ORIGIN` 配置额外来源。
-- `apps/api/.env`、SQLite 数据库文件、依赖和构建产物由 `.gitignore` 排除；`.env.example` 作为模板保留在仓库。
+- API 对跨域请求校验来源；默认允许本地 Vite 地址，可通过逗号分隔的 `CORS_ORIGIN` 配置额外来源。Render 的 `RENDER_EXTERNAL_URL` 自动加入允许列表。
+- `apps/api/.env`、数据库文件、备份、日志、依赖和构建产物由 `.gitignore` 排除；`.env.example` 作为模板保留在仓库。
 
 `localStorage` 令牌方案适合本地演示。生产部署还需根据目标环境配置 HTTPS、严格 CSP 和 XSS 防护；当前代码尚未实现生产级速率限制、安全响应头或数据库备份流程。
 
@@ -135,9 +135,9 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以字符串�
 - `/projects`：项目列表及项目创建、编辑、归档和删除。
 - `/projects/:projectId`：三列任务看板，可创建/编辑/删除任务，拖动改变状态和位置，并筛选、搜索和排序。
 - `/dashboard`：任务统计、状态和优先级分布图表，以及 CSV 下载入口。
-- Vitest API 测试通过 Supertest 调用 Express 应用，并用 Prisma/SQLite 验证认证、项目任务隔离及统计导出；Web Vitest 使用 jsdom。
+- Vitest API 测试通过 Supertest 调用 Express 应用，并用 Prisma/PostgreSQL 验证认证、项目任务隔离及统计导出；Web Vitest 使用 jsdom。
 - Playwright 使用 Chromium。当前仪表盘 E2E 用例为 `/api/**` 请求提供 mock，仅覆盖前端路由和展示；它不覆盖真实登录、API 或数据库链路。执行记录见 `TEST_REPORT.md`。
 
 ## 根目录命令
 
-`npm install` 是 npm 内置安装命令，不是自定义 `npm run` 脚本。根 `package.json` 提供 `dev`、`build`、`test`、`test:e2e`、`db:generate`、`db:push`、`db:migrate` 和 `db:seed`。本地完整步骤见 `README.md`。
+`npm install` 是 npm 内置安装命令，不是自定义 `npm run` 脚本。根 `package.json` 提供 `dev`、`build`、`start`、`test`、`test:e2e`、`db:generate`、`db:push`、`db:migrate`、`db:migrate:deploy` 和 `db:seed`。本地完整步骤见 `README.md`，Render 部署步骤见 `DEPLOY.md`。

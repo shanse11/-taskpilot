@@ -1,35 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-
-function ThemeToggle() {
-  const [dark, setDark] = useState(() => window.localStorage.getItem("taskpilot.theme") === "dark");
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    window.localStorage.setItem("taskpilot.theme", dark ? "dark" : "light");
-  }, [dark]);
-
-  return (
-    <button
-      aria-label={dark ? "切换浅色主题" : "切换深色主题"}
-      className="grid size-10 place-items-center rounded-full border border-slate-200 bg-white/80 text-slate-700 shadow-sm transition hover:bg-white dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200"
-      onClick={() => setDark((value) => !value)}
-      type="button"
-    >
-      <span aria-hidden="true" className="text-lg">{dark ? "☼" : "☾"}</span>
-    </button>
-  );
-}
-
-function Brand({ inverse = false }: { inverse?: boolean }) {
-  return (
-    <Link className={`inline-flex items-center gap-3 no-underline ${inverse ? "text-white" : "text-slate-950 dark:text-white"}`} to="/" aria-label="TaskPilot 首页">
-      <span className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-lg font-bold text-white shadow-lg shadow-indigo-950/20">T</span>
-      <span className="text-xl font-semibold tracking-tight">TaskPilot</span>
-    </Link>
-  );
-}
+import { Brand, ThemeToggle, WorkspaceHeader } from "./components/WorkspaceChrome";
+import ProjectBoardPage from "./pages/ProjectBoardPage";
+import ProjectsPage from "./pages/ProjectsPage";
 
 function AuthLayout({ children, mode }: { children: ReactNode; mode: "login" | "register" }) {
   return (
@@ -130,7 +104,7 @@ function LoginPage() {
     setSubmitting(true);
     try {
       await login(email.trim(), password);
-      navigate("/profile", { replace: true });
+      navigate("/projects", { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "登录失败，请稍后重试");
     } finally {
@@ -174,7 +148,7 @@ function RegisterPage() {
     try {
       await register(email.trim(), password, name.trim());
       await login(email.trim(), password);
-      navigate("/profile", { replace: true });
+      navigate("/projects", { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "注册失败，请稍后重试");
     } finally {
@@ -220,17 +194,15 @@ function RequireAuth({ children }: { children: ReactNode }) {
 function GuestOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingPage />;
-  return user ? <Navigate replace to="/profile" /> : children;
+  return user ? <Navigate replace to="/projects" /> : children;
 }
 
 function ProfilePage() {
-  const { user, updateName, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateName } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => setName(user?.name ?? ""), [user?.name]);
 
@@ -249,24 +221,11 @@ function ProfilePage() {
     }
   }
 
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await logout();
-    } finally {
-      navigate("/login", { replace: true });
-      setLoggingOut(false);
-    }
-  }
-
   if (!user) return <LoadingPage />;
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] px-4 py-6 text-slate-900 dark:bg-[#080c18] dark:text-slate-100 sm:px-8 sm:py-10">
-      <header className="mx-auto flex max-w-5xl items-center justify-between">
-        <Brand />
-        <div className="flex items-center gap-3"><ThemeToggle /><button className="hidden rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:inline-flex" onClick={() => void handleLogout()} type="button">{loggingOut ? "正在退出…" : "退出登录"}</button></div>
-      </header>
+      <WorkspaceHeader />
 
       <div className="mx-auto mt-10 max-w-5xl lg:mt-16">
         <div className="mb-8">
@@ -302,7 +261,6 @@ function ProfilePage() {
               {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300" role="alert">{error}</p>}
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <button className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-60" disabled={saving} type="submit">{saving ? "正在保存…" : "保存资料"}</button>
-                <button className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:hidden" disabled={loggingOut} onClick={() => void handleLogout()} type="button">{loggingOut ? "正在退出…" : "退出登录"}</button>
               </div>
             </form>
           </section>
@@ -317,9 +275,11 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
       <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
+      <Route path="/projects" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
+      <Route path="/projects/:projectId" element={<RequireAuth><ProjectBoardPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
-      <Route path="/" element={<Navigate replace to="/profile" />} />
-      <Route path="*" element={<Navigate replace to="/profile" />} />
+      <Route path="/" element={<Navigate replace to="/projects" />} />
+      <Route path="*" element={<Navigate replace to="/projects" />} />
     </Routes>
   );
 }

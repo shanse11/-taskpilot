@@ -1,6 +1,6 @@
 # TaskPilot
 
-TaskPilot 是一个可本地运行的全栈任务管理平台。当前包含账号注册、登录、JWT 鉴权和个人资料编辑；项目与任务路由已默认要求登录，业务端点会在后续阶段实现。
+TaskPilot 是一个可本地运行的全栈项目与任务管理平台，包含账号注册、JWT 鉴权、项目 CRUD、任务 CRUD、筛选搜索和可拖拽看板。每个项目和任务都按当前登录用户隔离。
 
 ## 技术栈
 
@@ -39,6 +39,23 @@ Vite 前端地址为 <http://localhost:5173>，Express API 地址为 <http://loc
 - 前端将访问令牌保存在浏览器 `localStorage` 的 `taskpilot.accessToken` 项中，并由 API client 自动添加 `Authorization` 请求头。刷新页面时会通过 `/api/auth/me` 恢复登录状态。此方案便于本地开发；同源脚本若被攻破会读取到 localStorage，因此部署时应配合严格的 CSP 和常规 XSS 防护。
 - `/api/projects` 和 `/api/tasks` 下的请求都经过 JWT 中间件；健康检查和注册、登录接口公开。
 
+## 项目与任务
+
+- 项目列表页支持新建、编辑、归档和删除。删除项目会一并删除项目内的任务。
+- 打开项目后可在待办、进行中、已完成三列看板中创建和编辑任务。拖动任务卡片可调整状态和列内位置；也可在编辑对话框设置状态、优先级和截止日期。
+- 看板支持按状态、优先级筛选，按任务标题或描述搜索，并按位置、截止日期、优先级、标题或创建时间排序。逾期任务会在卡片上标记。
+- `/api/projects` 与 `/api/tasks` 所有接口都要求 Bearer JWT。任务列表路径为 `/api/projects/:projectId/tasks`，可带 `status`、`priority`、`q` 和 `sort` 查询参数。越权访问统一返回 `404 not_found`。
+
+项目状态为 `active` / `archived`；任务状态为 `todo` / `in_progress` / `done`；优先级为 `low` / `medium` / `high`。日期接受 `YYYY-MM-DD` 或带时区的 ISO datetime。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/projects` | 列出或创建项目 |
+| `GET` / `PATCH` / `DELETE` | `/api/projects/:id` | 查看、更新或删除项目 |
+| `GET` / `POST` | `/api/projects/:projectId/tasks` | 列出或创建项目任务 |
+| `GET` / `PATCH` / `DELETE` | `/api/tasks/:id` | 查看、更新或删除任务 |
+| `PATCH` | `/api/tasks/:id/status` | 更新看板状态与位置 |
+
 ## API 示例
 
 ```bash
@@ -57,13 +74,15 @@ curl -X POST http://localhost:4000/api/auth/login \
 curl http://localhost:4000/api/auth/me -H 'Authorization: Bearer <token>'
 ```
 
-如需创建演示账号和数据，先设置本地演示密码，再运行 seed：
+如需创建两名演示用户、三个项目和不同状态/优先级任务（含逾期任务），先设置演示密码，再运行 seed：
 
 ```bash
 SEED_USER_PASSWORD='choose-a-local-demo-password' npm run db:seed
 ```
 
 演示用户密码也会经过 bcrypt 哈希；不要在生产环境复用演示密码。
+
+演示账号为 `demo@taskpilot.local`（Avery Chen）和 `jordan@taskpilot.local`（Jordan Lee），两者使用刚才设置的 `SEED_USER_PASSWORD`。Seed 使用固定 ID 和 upsert，可重复运行。
 
 ## 常用命令
 

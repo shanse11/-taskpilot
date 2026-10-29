@@ -29,11 +29,13 @@ describe("authentication screens", () => {
   });
 
   it("logs in, stores the Bearer token, and opens the protected profile", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ token: "signed-test-token", user: testUser }),
-    } as Response);
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      const data = path.endsWith("/auth/login")
+        ? { token: "signed-test-token", user: testUser }
+        : { projects: [] };
+      return Promise.resolve({ ok: true, status: 200, json: async () => data } as Response);
+    });
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
 
@@ -41,7 +43,7 @@ describe("authentication screens", () => {
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "correct-horse" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "个人资料" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "项目" })).toBeTruthy());
     expect(window.localStorage.getItem("taskpilot.accessToken")).toBe("signed-test-token");
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/login", expect.objectContaining({
       credentials: "include",

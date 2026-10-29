@@ -112,19 +112,19 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以 `String` �
 | `POST` | `/api/auth/logout` | 验证令牌，通知前端清除本地令牌 | 已实现 |
 | `GET` | `/api/auth/me` | 返回当前用户资料 | 已实现 |
 | `PATCH` | `/api/auth/me` | 更新当前用户姓名 | 已实现 |
-| `GET` | `/api/projects` | 列出当前用户项目，可按状态过滤 | 项目阶段 |
-| `POST` | `/api/projects` | 创建项目 | 项目阶段 |
-| `GET` | `/api/projects/:projectId` | 获取项目及可选任务摘要 | 项目阶段 |
-| `PATCH` | `/api/projects/:projectId` | 更新名称、描述或状态 | 项目阶段 |
-| `DELETE` | `/api/projects/:projectId` | 删除项目及其任务 | 项目阶段 |
-| `GET` | `/api/projects/:projectId/tasks` | 列出指定项目任务，支持状态/优先级/日期过滤 | 任务阶段 |
-| `POST` | `/api/projects/:projectId/tasks` | 在项目中创建任务 | 任务阶段 |
-| `GET` | `/api/tasks/:taskId` | 获取当前用户任务 | 任务阶段 |
-| `PATCH` | `/api/tasks/:taskId` | 更新任务字段或状态 | 任务阶段 |
-| `DELETE` | `/api/tasks/:taskId` | 删除任务 | 任务阶段 |
-| `PATCH` | `/api/projects/:projectId/tasks/reorder` | 保存项目内任务排序 | 任务阶段 |
+| `GET` | `/api/projects` | 列出当前用户项目，可按状态过滤 | 已实现 |
+| `POST` | `/api/projects` | 创建项目 | 已实现 |
+| `GET` | `/api/projects/:projectId` | 获取项目及任务状态摘要 | 已实现 |
+| `PATCH` | `/api/projects/:projectId` | 更新名称、描述或状态 | 已实现 |
+| `DELETE` | `/api/projects/:projectId` | 删除项目及其任务 | 已实现 |
+| `GET` | `/api/projects/:projectId/tasks` | 列出任务，支持状态、优先级、搜索与排序 | 已实现 |
+| `POST` | `/api/projects/:projectId/tasks` | 在项目中创建任务 | 已实现 |
+| `GET` | `/api/tasks/:taskId` | 获取当前用户任务 | 已实现 |
+| `PATCH` | `/api/tasks/:taskId` | 更新任务字段、状态或看板位置 | 已实现 |
+| `PATCH` | `/api/tasks/:taskId/status` | 更新看板状态与位置 | 已实现 |
+| `DELETE` | `/api/tasks/:taskId` | 删除任务 | 已实现 |
 
-认证请求使用 Zod 校验。项目和任务路由目前没有业务端点，但路由级 JWT 中间件已启用，后续新增端点会默认拒绝未认证请求。
+认证请求使用 Zod 校验。项目和任务路由都要求 JWT；未授权或不存在的资源统一返回 `404`，避免暴露其他用户资源是否存在。
 
 ## 鉴权和密码方案
 
@@ -138,9 +138,8 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以 `String` �
 
 ## 功能实现顺序
 
-1. 认证：注册、登录、JWT 中间件、当前用户接口和权限测试。
-2. 项目管理：按用户隔离的项目 CRUD、归档与删除行为。
-3. 任务管理：任务 CRUD、状态/优先级校验、截止日期与排序。
-4. Web 工作台：认证表单、项目列表、任务列表及加载/空/错误状态。
-5. 交互增强：筛选、拖动排序、响应式体验、无障碍细节。
-6. 加固与发布准备：输入校验、限流、安全头、迁移策略、备份说明和端到端验收。
+1. 认证：注册、登录、JWT 中间件、当前用户接口和权限测试。已实现。
+2. 项目管理：按用户隔离的项目 CRUD、归档与级联删除。已实现。
+3. 任务管理：任务 CRUD、状态/优先级校验、截止日期、筛选和排序。已实现。
+4. Web 工作台：项目列表、三列看板、任务对话框、加载/空/错误状态。已实现。
+5. 下一步：仪表盘、图表、CSV 导出和发布加固。

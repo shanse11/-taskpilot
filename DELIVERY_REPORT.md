@@ -62,3 +62,8 @@ npm run test:e2e
 ## 交付边界
 
 当前交付面向本地开发和演示。演示 seed 命令与浏览器 E2E 的 mock 范围均已在文档中说明；生产环境所需的速率限制、安全响应头、备份恢复和部署拓扑尚未实现或验证。
+
+
+## 真实浏览器验收
+
+2026-10-29 对本地开发服务完成人工浏览器验收，**9/9 PASS**。证据目录：`/workspace/TaskPilot/delivery-screenshots/`（含 `BROWSER_QA.txt` 与运行截图）。

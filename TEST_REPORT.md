@@ -36,3 +36,12 @@ API Vitest 使用 Supertest 调用 Express 应用，并通过 Prisma/SQLite 检�
 - `e80e754` — `feat: implement user auth with JWT and UI`
 - `5b59a87` — `feat: projects and tasks API with kanban UI`
 - `9dc6330` — `feat: dashboard stats charts and CSV export`
+
+
+## 真实浏览器验收（2026-10-29）
+
+在本地运行 `apps/api` + `apps/web` 后，使用桌面浏览器对 `http://127.0.0.1:5173/` 进行人工验收，结果 **9/9 PASS**。详见 `delivery-screenshots/BROWSER_QA.txt`。
+
+验证覆盖：注册新用户、demo 登录、新建项目/任务、看板拖拽改状态、编辑任务、仪表盘统计与图表、深浅色主题、CSV 导出、390px 窄屏、跨用户数据隔离。
+
+截图：`delivery-screenshots/01-login-page.png` … `07-dashboard-narrow-390-dark.png`。

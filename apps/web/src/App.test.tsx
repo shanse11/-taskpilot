@@ -50,4 +50,27 @@ describe("authentication screens", () => {
       headers: expect.any(Headers),
     }));
   });
+
+  it("opens the dashboard for an authenticated user and renders task statistics", async () => {
+    window.localStorage.setItem("taskpilot.accessToken", "signed-test-token");
+    window.history.replaceState({}, "", "/dashboard");
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      const data = path.endsWith("/auth/me")
+        ? { user: testUser }
+        : path.includes("/dashboard/stats")
+          ? { stats: { totalTasks: 4, completedTasks: 1, overdueTasks: 1, completionRate: 25, priorityDistribution: { low: 1, medium: 2, high: 1 }, statusDistribution: { todo: 2, in_progress: 1, done: 1 } } }
+          : { projects: [] };
+      return Promise.resolve({ ok: true, status: 200, json: async () => data, blob: async () => new Blob() } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "数据仪表盘" })).toBeTruthy());
+    expect(screen.getByText("任务总数")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "按状态分布" })).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/stats", expect.objectContaining({
+      headers: expect.any(Headers),
+    }));
+  });
 });

@@ -139,4 +139,51 @@ describe("project and task API", () => {
     expect((await request(app).delete(`/api/tasks/${first.body.task.id}`).set(authA())).status).toBe(204);
     expect(await prisma.task.findUnique({ where: { id: first.body.task.id } })).toBeNull();
   });
+
+  it("returns accurate user-scoped dashboard statistics and CSV exports", async () => {
+    const secondProject = await prisma.project.create({ data: { userId: userAId, name: "Owner A second project" } });
+    await prisma.task.createMany({
+      data: [
+        { projectId: projectAId, userId: userAId, title: "Prepare, \"ready\"", description: "Launch, QA", priority: "high", status: "todo", dueDate: new Date("2026-01-15T00:00:00.000Z"), position: 0 },
+        { projectId: projectAId, userId: userAId, title: "Future review", priority: "low", status: "in_progress", dueDate: new Date("2026-12-01T00:00:00.000Z"), position: 0 },
+        { projectId: projectAId, userId: userAId, title: "Completed launch", priority: "medium", status: "done", dueDate: new Date("2026-01-15T00:00:00.000Z"), position: 0 },
+        { projectId: secondProject.id, userId: userAId, title: "Second project task", priority: "medium", status: "todo", dueDate: null, position: 0 },
+        { projectId: projectBId, userId: userBId, title: "Private Jordan task", priority: "high", status: "todo", dueDate: new Date("2026-01-15T00:00:00.000Z"), position: 0 },
+      ],
+    });
+
+    expect((await request(app).get("/api/dashboard/stats")).status).toBe(401);
+    const allStats = await request(app).get("/api/dashboard/stats").set(authA());
+    expect(allStats.status).toBe(200);
+    expect(allStats.body.stats).toEqual({
+      totalTasks: 4,
+      completedTasks: 1,
+      overdueTasks: 1,
+      completionRate: 25,
+      priorityDistribution: { low: 1, medium: 2, high: 1 },
+      statusDistribution: { todo: 2, in_progress: 1, done: 1 },
+    });
+
+    const filteredStats = await request(app).get(`/api/dashboard/stats?projectId=${projectAId}`).set(authA());
+    expect(filteredStats.body.stats).toMatchObject({
+      totalTasks: 3,
+      completedTasks: 1,
+      overdueTasks: 1,
+      completionRate: 33.3,
+      statusDistribution: { todo: 1, in_progress: 1, done: 1 },
+    });
+    expect((await request(app).get(`/api/dashboard/stats?projectId=${projectBId}`).set(authA())).status).toBe(404);
+
+    const ownCsv = await request(app).get("/api/export/tasks.csv").set(authA());
+    expect(ownCsv.status).toBe(200);
+    expect(ownCsv.headers["content-type"]).toContain("text/csv");
+    expect(ownCsv.headers["content-disposition"]).toContain('filename="taskpilot-tasks.csv"');
+    expect(ownCsv.text).toContain('"project","title","description","status","priority","due_date"');
+    expect(ownCsv.text).toContain('"Owner A project","Prepare, ""ready""","Launch, QA","todo","high","2026-01-15T00:00:00.000Z"');
+    expect(ownCsv.text).not.toContain("Private Jordan task");
+    expect((await request(app).get("/api/export/tasks.csv")).status).toBe(401);
+
+    const otherUserStats = await request(app).get("/api/dashboard/stats").set(authB());
+    expect(otherUserStats.body.stats).toMatchObject({ totalTasks: 1, completedTasks: 0, overdueTasks: 1 });
+  });
 });

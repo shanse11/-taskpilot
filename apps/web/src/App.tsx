@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Brand, ThemeToggle, WorkspaceHeader } from "./components/WorkspaceChrome";
 import ProjectBoardPage from "./pages/ProjectBoardPage";
+import DashboardPage from "./pages/DashboardPage";
 import ProjectsPage from "./pages/ProjectsPage";
 
 function AuthLayout({ children, mode }: { children: ReactNode; mode: "login" | "register" }) {
@@ -277,6 +278,7 @@ function AppRoutes() {
       <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
       <Route path="/projects" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectBoardPage /></RequireAuth>} />
+      <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
       <Route path="/" element={<Navigate replace to="/projects" />} />
       <Route path="*" element={<Navigate replace to="/projects" />} />

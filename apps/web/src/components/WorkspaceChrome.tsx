@@ -50,10 +50,11 @@ export function WorkspaceHeader() {
 
   return (
     <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
-      <div className="flex items-center gap-5 sm:gap-8">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 sm:gap-8">
         <Brand />
-        <nav aria-label="主导航" className="flex items-center gap-1">
+        <nav aria-label="主导航" className="flex flex-wrap items-center gap-1">
           <NavLink className={navClass} to="/projects">项目</NavLink>
+          <NavLink className={navClass} to="/dashboard">仪表盘</NavLink>
           <NavLink className={navClass} to="/profile">个人资料</NavLink>
         </nav>
       </div>

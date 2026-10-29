@@ -45,6 +45,9 @@ Vite 前端地址为 <http://localhost:5173>，Express API 地址为 <http://loc
 - 打开项目后可在待办、进行中、已完成三列看板中创建和编辑任务。拖动任务卡片可调整状态和列内位置；也可在编辑对话框设置状态、优先级和截止日期。
 - 看板支持按状态、优先级筛选，按任务标题或描述搜索，并按位置、截止日期、优先级、标题或创建时间排序。逾期任务会在卡片上标记。
 - `/api/projects` 与 `/api/tasks` 所有接口都要求 Bearer JWT。任务列表路径为 `/api/projects/:projectId/tasks`，可带 `status`、`priority`、`q` 和 `sort` 查询参数。越权访问统一返回 `404 not_found`。
+- `GET /api/dashboard/stats` 返回当前用户的任务总数、已完成数、逾期数、完成率、优先级分布和状态分布；可带本人项目的 `projectId` 查询参数筛选。
+- `GET /api/export/tasks.csv` 导出当前用户的任务，包含项目名、标题、描述、状态、优先级、截止日期和创建/更新时间，响应为 UTF-8 CSV 附件。
+- 登录后可从主导航打开 `/dashboard` 查看统计图表并下载 CSV。
 
 项目状态为 `active` / `archived`；任务状态为 `todo` / `in_progress` / `done`；优先级为 `low` / `medium` / `high`。日期接受 `YYYY-MM-DD` 或带时区的 ISO datetime。
 
@@ -55,6 +58,8 @@ Vite 前端地址为 <http://localhost:5173>，Express API 地址为 <http://loc
 | `GET` / `POST` | `/api/projects/:projectId/tasks` | 列出或创建项目任务 |
 | `GET` / `PATCH` / `DELETE` | `/api/tasks/:id` | 查看、更新或删除任务 |
 | `PATCH` | `/api/tasks/:id/status` | 更新看板状态与位置 |
+| `GET` | `/api/dashboard/stats` | 当前用户任务统计，可选 `projectId` |
+| `GET` | `/api/export/tasks.csv` | 下载当前用户任务 CSV |
 
 ## API 示例
 

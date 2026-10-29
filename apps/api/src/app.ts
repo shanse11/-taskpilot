@@ -7,8 +7,28 @@ import { apiRouter } from "./routes/index.js";
 export const app = express();
 
 app.disable("x-powered-by");
+
+app.use((request, response, next) => {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  );
+
+  const forwardedProto = request.header("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (request.secure || forwardedProto === "https") {
+    response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+
+  next();
+});
+
 const allowedOrigins = new Set([
   "http://localhost:5173",
+  "https://task.shanse.dev",
   process.env.RENDER_EXTERNAL_URL,
   ...(process.env.CORS_ORIGIN ?? "").split(",").map((origin) => origin.trim()).filter(Boolean),
 ].filter((origin): origin is string => Boolean(origin)));

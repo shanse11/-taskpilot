@@ -1,0 +1,27 @@
+{
+  "name": "taskpilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A self-hostable task management platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run db:generate --workspace @taskpilot/api",
+    "dev": "concurrently -k -n api,web -c green,cyan \"npm run dev --workspace @taskpilot/api\" \"npm run dev --workspace @taskpilot/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace @taskpilot/web",
+    "db:generate": "npm run db:generate --workspace @taskpilot/api",
+    "db:push": "npm run db:push --workspace @taskpilot/api",
+    "db:migrate": "npm run db:migrate --workspace @taskpilot/api",
+    "db:seed": "npm run db:seed --workspace @taskpilot/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  }
+}

@@ -15,6 +15,13 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "prisma/seed.ts", "vitest.config.ts"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src/**/*.ts", "prisma/seed.ts"],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/**/*.test.*",
+    "src/**/*.spec.*",
+    "src/**/__tests__/**",
+    "src/**/__test__/**"
+  ]
 }

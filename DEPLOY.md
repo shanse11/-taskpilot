@@ -7,7 +7,13 @@
 1. 将仓库推送到 GitHub，并确认 Render 有权读取该仓库。
 2. 在 Render Dashboard 选择 **New → Blueprint**，连接仓库并选择部署分支。Render 会读取根目录的 `render.yaml`。
 3. 检查 Blueprint 预览后应用配置。它会创建 `taskpilot` Web Service 和 `taskpilot-postgres` 数据库。
-4. 等待首次构建和部署成功。构建步骤会执行 `npm install`、`npm run build`、`npm run db:migrate:deploy`；Render 随后运行 `npm start`。可先打开 Render 分配的 `*.onrender.com/api/health`，应返回 `{"status":"ok","service":"taskpilot-api"}`。
+4. 等待首次构建和部署成功。Render Build Command 应设置为：
+
+   ```bash
+   npm install --include=dev && npm run build && npm run db:migrate:deploy
+   ```
+
+   Blueprint 会从 `render.yaml` 读取该命令；如果服务是在 Dashboard 中创建的，请在 **Settings → Build & Deploy → Build Command** 手动设置相同命令。Render 随后运行 `npm start`。可先打开 Render 分配的 `*.onrender.com/api/health`，应返回 `{"status":"ok","service":"taskpilot-api"}`。
 
 `DATABASE_URL` 由 Blueprint 引用数据库连接字符串，`JWT_SECRET` 由 Render 生成。仓库中不保存生产密钥。Render 自动提供 `PORT` 和 `RENDER_EXTERNAL_URL`：API 监听 `0.0.0.0:$PORT`，并将 Render 默认域名加入 CORS 允许列表。`CORS_ORIGIN` 还允许 `https://task.shanse.dev`。
 

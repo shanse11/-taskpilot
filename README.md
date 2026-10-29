@@ -113,6 +113,8 @@ Seed 前先运行 `npm run db:migrate:deploy`。完成 seed 后，在登录页�
 
 仓库根目录的 `render.yaml` 定义了单一 Express Web Service 和 PostgreSQL。完整的 Blueprint、环境变量、DNS 和更新步骤见 [DEPLOY.md](./DEPLOY.md)。生产进程由 Express 同时提供 `/api/*`、静态 Web 资源和 SPA 路由回退。
 
+Render Build Command：`npm install --include=dev && npm run build && npm run db:migrate:deploy`。Dashboard 中创建的服务也需要在 **Settings → Build & Deploy → Build Command** 设置此命令。
+
 SQLite 备份文件保存在 `backups/` 且不会提交到仓库。PostgreSQL 迁移只创建 schema，不会自动复制 SQLite 备份里的用户或任务记录；需要迁移旧记录时应单独安排数据导入。
 
 ## 测试

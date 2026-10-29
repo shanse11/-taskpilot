@@ -1,4 +1,7 @@
 import { Router } from "express";
+import { requireAuth } from "../middleware/auth.js";
 
-// Project handlers are added after authentication and ownership middleware.
 export const projectsRouter = Router();
+
+// All current and future project endpoints are private by default.
+projectsRouter.use(requireAuth);

@@ -1,4 +1,7 @@
 import { Router } from "express";
+import { requireAuth } from "../middleware/auth.js";
 
-// Task handlers are added after authentication and ownership middleware.
 export const tasksRouter = Router();
+
+// All current and future task endpoints are private by default.
+tasksRouter.use(requireAuth);

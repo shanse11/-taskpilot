@@ -24,7 +24,8 @@ apps/
   api/
     prisma/              Prisma schema、迁移与演示数据 seed
     src/
-      routes/            Express 路由入口及认证/项目/任务空路由
+      routes/            Express 路由入口与认证、项目、任务路由
+      middleware/        JWT 身份校验中间件
       lib/               Prisma Client 单例
       app.ts              Express 应用与中间件
       index.ts            API 进程入口
@@ -106,9 +107,11 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以 `String` �
 | 方法 | 路径 | 用途 | 阶段 |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | API 健康检查 | 已搭建 |
-| `POST` | `/api/auth/register` | 注册账号并返回访问令牌 | 认证阶段 |
-| `POST` | `/api/auth/login` | 校验密码并签发访问令牌 | 认证阶段 |
-| `GET` | `/api/auth/me` | 返回当前用户资料 | 认证阶段 |
+| `POST` | `/api/auth/register` | 注册账号并返回安全用户资料 | 已实现 |
+| `POST` | `/api/auth/login` | 校验密码并签发访问令牌 | 已实现 |
+| `POST` | `/api/auth/logout` | 验证令牌，通知前端清除本地令牌 | 已实现 |
+| `GET` | `/api/auth/me` | 返回当前用户资料 | 已实现 |
+| `PATCH` | `/api/auth/me` | 更新当前用户姓名 | 已实现 |
 | `GET` | `/api/projects` | 列出当前用户项目，可按状态过滤 | 项目阶段 |
 | `POST` | `/api/projects` | 创建项目 | 项目阶段 |
 | `GET` | `/api/projects/:projectId` | 获取项目及可选任务摘要 | 项目阶段 |
@@ -121,15 +124,17 @@ SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以 `String` �
 | `DELETE` | `/api/tasks/:taskId` | 删除任务 | 任务阶段 |
 | `PATCH` | `/api/projects/:projectId/tasks/reorder` | 保存项目内任务排序 | 任务阶段 |
 
-请求校验、分页和统一错误响应会在各业务模块实现时补齐。当前空路由不会假装已实现这些端点。
+认证请求使用 Zod 校验。项目和任务路由目前没有业务端点，但路由级 JWT 中间件已启用，后续新增端点会默认拒绝未认证请求。
 
 ## 鉴权和密码方案
 
-- 注册时使用 `bcryptjs` 对密码做 bcrypt 哈希（建议 cost factor 12），只将结果存入 `User.passwordHash`。登录使用 bcrypt compare，绝不返回哈希。
-- 登录成功后用 `jsonwebtoken` 签发短时访问 JWT，subject 为 User ID；签名密钥通过环境变量 `JWT_SECRET` 注入，不提交真实密钥。
+- 注册时使用 `bcryptjs` 对密码做 bcrypt 哈希（cost factor 12），只将结果存入 `User.passwordHash`。登录使用 bcrypt compare，绝不返回哈希。
+- 登录成功后用 `jsonwebtoken` 签发 1 小时访问 JWT，subject 和 `userId` claim 为 User ID，并包含 `email`；签名密钥通过环境变量 `JWT_SECRET` 注入。生产环境缺少密钥时 API 拒绝启动。
+- Web 将 Bearer 访问令牌保存在 `localStorage`，页面启动时调用 `/api/auth/me` 恢复用户；纯 Bearer 退出由客户端删除令牌，服务端不维护令牌撤销表。
+- API 允许来自 `http://localhost:5173` 的跨域请求，并响应带凭据的 CORS 配置；Web 使用 `credentials: include` 发送请求，但当前认证仍只使用 Bearer token。
 - 初期 API 使用 Bearer token。后续若增加 refresh token，应使用随机高熵值并只保存其哈希，设置轮换、过期和撤销策略。
 - 认证中间件负责解析 JWT 并向请求上下文附加可信用户 ID；权限检查必须在每个资源读取和写入路径执行。
-- Web 生产环境的 token 持久化策略需在认证模块实现时确定；优先评估 HttpOnly、Secure、SameSite Cookie 与 CSRF 防护，再决定是否采用浏览器存储。
+- 当前 Web 使用 `localStorage` 保存访问令牌；生产部署应配置严格的 CSP 并持续防护 XSS。若改为 HttpOnly Cookie，需要同时设置 Secure、SameSite 和 CSRF 防护。
 
 ## 功能实现顺序
 

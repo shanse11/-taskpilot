@@ -3,9 +3,15 @@ dist/
 coverage/
 playwright-report/
 test-results/
+logs/
+*.log
 .env
 .env.*
 !.env.example
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+.codex_*
+CODEX_*_PROMPT.md
 .DS_Store

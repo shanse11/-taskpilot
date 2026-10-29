@@ -1,12 +1,12 @@
 # TaskPilot
 
-TaskPilot 是一个可本地运行的全栈项目与任务管理平台，包含账号注册、JWT 鉴权、项目 CRUD、任务 CRUD、筛选搜索和可拖拽看板。每个项目和任务都按当前登录用户隔离。
+TaskPilot 是一个可在本地运行的项目与任务管理平台。它提供账号注册与登录、按用户隔离的项目管理、任务看板、统计仪表盘和 CSV 导出。应用使用 SQLite 保存数据，不依赖付费第三方 API 或云服务。
 
 ## 技术栈
 
-- Web：React、TypeScript、Vite、Tailwind CSS、React Router
-- API：Node.js、Express、TypeScript、Zod
-- 数据库：SQLite、Prisma ORM
+- Web：React 19、TypeScript、Vite、Tailwind CSS、React Router
+- API：Node.js、Express 5、TypeScript、Zod
+- 数据库：SQLite、Prisma 6
 - 认证：bcryptjs 密码哈希、HS256 JWT
 - 测试：Vitest、Supertest、Playwright
 
@@ -14,98 +14,111 @@ TaskPilot 是一个可本地运行的全栈项目与任务管理平台，包含�
 
 - Node.js 20.19 或更高版本
 - npm 10 或更高版本
+- 运行 E2E 测试时还需要 Playwright Chromium 及其系统依赖
 
-## 安装与开发启动
+## 安装和启动
 
-在仓库根目录运行：
+在仓库根目录安装依赖。`install` 是 npm 的内置命令，不是 `npm run` 脚本；安装过程会运行 Prisma Client 生成步骤。
 
 ```bash
+cd /workspace/TaskPilot
 npm install
 cp apps/api/.env.example apps/api/.env
+```
+
+`apps/api/.env.example` 提供本地 `PORT` 和 `JWT_SECRET`。本地默认 API 端口为 `4000`，Vite 开发服务器端口为 `5173`。SQLite 文件位于 `apps/api/prisma/dev.db`，由 `.gitignore` 排除。
+
+创建或同步本地数据库 schema：
+
+```bash
 npm run db:push
+```
+
+然后启动 Web 和 API（在一个终端中运行）：
+
+```bash
 npm run dev
 ```
 
-Vite 前端地址为 <http://localhost:5173>，Express API 地址为 <http://localhost:4000>。Vite 将 `/api` 请求代理到 API；API 也允许来自 `http://localhost:5173` 的 CORS 请求。SQLite 文件默认创建在 `apps/api/prisma/dev.db`，该数据库文件不会提交到 Git。
+打开 <http://localhost:5173>。Web 通过 Vite 将 `/api` 请求代理到 <http://localhost:4000>。按 `Ctrl+C` 停止两个开发服务。
 
-`apps/api/.env.example` 中的 `JWT_SECRET` 仅供本地开发。部署到生产环境时，必须设置至少 32 个字符的随机 `JWT_SECRET`；API 在生产环境没有该配置时会拒绝启动。访问令牌有效期为 1 小时。
+本地模板密钥只用于开发。部署到生产环境时，应提供至少 32 个字符的随机 `JWT_SECRET`；生产模式缺少有效密钥时 API 会拒绝启动。JWT 有效期为 1 小时。
 
-## 认证行为
+## 演示数据和默认账号
 
-- 注册：`POST /api/auth/register`，请求包含 `email`、至少 8 个字符的 `password` 和 `name`。密码使用 bcrypt cost 12 哈希；邮箱冲突返回 `409`。
-- 登录：`POST /api/auth/login`，成功返回 `{ token, user }`。JWT 带有 `userId`、`email` 和标准 `sub` claim。
-- 当前用户：`GET /api/auth/me`；资料更新：`PATCH /api/auth/me`，请求体为 `{ "name": "新姓名" }`。两者都要求 `Authorization: Bearer <token>`。
-- 退出：`POST /api/auth/logout` 要求有效 Bearer token，返回 `204`。令牌不存储在服务器，因此前端在退出时删除本地令牌；令牌过期后也应删除。
-- 前端将访问令牌保存在浏览器 `localStorage` 的 `taskpilot.accessToken` 项中，并由 API client 自动添加 `Authorization` 请求头。刷新页面时会通过 `/api/auth/me` 恢复登录状态。此方案便于本地开发；同源脚本若被攻破会读取到 localStorage，因此部署时应配合严格的 CSP 和常规 XSS 防护。
-- `/api/projects` 和 `/api/tasks` 下的请求都经过 JWT 中间件；健康检查和注册、登录接口公开。
-
-## 项目与任务
-
-- 项目列表页支持新建、编辑、归档和删除。删除项目会一并删除项目内的任务。
-- 打开项目后可在待办、进行中、已完成三列看板中创建和编辑任务。拖动任务卡片可调整状态和列内位置；也可在编辑对话框设置状态、优先级和截止日期。
-- 看板支持按状态、优先级筛选，按任务标题或描述搜索，并按位置、截止日期、优先级、标题或创建时间排序。逾期任务会在卡片上标记。
-- `/api/projects` 与 `/api/tasks` 所有接口都要求 Bearer JWT。任务列表路径为 `/api/projects/:projectId/tasks`，可带 `status`、`priority`、`q` 和 `sort` 查询参数。越权访问统一返回 `404 not_found`。
-- `GET /api/dashboard/stats` 返回当前用户的任务总数、已完成数、逾期数、完成率、优先级分布和状态分布；可带本人项目的 `projectId` 查询参数筛选。
-- `GET /api/export/tasks.csv` 导出当前用户的任务，包含项目名、标题、描述、状态、优先级、截止日期和创建/更新时间，响应为 UTF-8 CSV 附件。
-- 登录后可从主导航打开 `/dashboard` 查看统计图表并下载 CSV。
-
-项目状态为 `active` / `archived`；任务状态为 `todo` / `in_progress` / `done`；优先级为 `low` / `medium` / `high`。日期接受 `YYYY-MM-DD` 或带时区的 ISO datetime。
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` / `POST` | `/api/projects` | 列出或创建项目 |
-| `GET` / `PATCH` / `DELETE` | `/api/projects/:id` | 查看、更新或删除项目 |
-| `GET` / `POST` | `/api/projects/:projectId/tasks` | 列出或创建项目任务 |
-| `GET` / `PATCH` / `DELETE` | `/api/tasks/:id` | 查看、更新或删除任务 |
-| `PATCH` | `/api/tasks/:id/status` | 更新看板状态与位置 |
-| `GET` | `/api/dashboard/stats` | 当前用户任务统计，可选 `projectId` |
-| `GET` | `/api/export/tasks.csv` | 下载当前用户任务 CSV |
-
-## API 示例
-
-```bash
-curl -X POST http://localhost:4000/api/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"pilot@example.com","password":"correct-horse-battery","name":"Avery Chen"}'
-
-curl -X POST http://localhost:4000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"pilot@example.com","password":"correct-horse-battery"}'
-```
-
-将登录响应的 `token` 用于受保护请求：
-
-```bash
-curl http://localhost:4000/api/auth/me -H 'Authorization: Bearer <token>'
-```
-
-如需创建两名演示用户、三个项目和不同状态/优先级任务（含逾期任务），先设置演示密码，再运行 seed：
+Seed 会创建两名演示用户、三个项目和五个任务，包含不同状态、优先级及逾期任务。两名用户使用同一个密码，密码只从环境变量 `SEED_USER_PASSWORD` 读取：
 
 ```bash
 SEED_USER_PASSWORD='choose-a-local-demo-password' npm run db:seed
 ```
 
-演示用户密码也会经过 bcrypt 哈希；不要在生产环境复用演示密码。
+Seed 前先运行 `npm run db:push`。完成 seed 后，在登录页使用以下任一账号和刚才设置的密码：
 
-演示账号为 `demo@taskpilot.local`（Avery Chen）和 `jordan@taskpilot.local`（Jordan Lee），两者使用刚才设置的 `SEED_USER_PASSWORD`。Seed 使用固定 ID 和 upsert，可重复运行。
+| 邮箱 | 用户名 |
+| --- | --- |
+| `demo@taskpilot.local` | Avery Chen |
+| `jordan@taskpilot.local` | Jordan Lee |
 
-## 常用命令
+示例密码仅供本机演示，请换成自己的值，不要在生产环境复用。Seed 使用固定 ID 和 upsert，可重复运行；再次运行时会把这两个账号的密码更新为本次 `SEED_USER_PASSWORD`。
+
+## 功能和 API
+
+- 注册、登录、个人资料读取与姓名更新；密码以 bcrypt 哈希保存，受保护 API 使用 Bearer JWT。
+- 项目列表、创建、编辑、归档和删除；删除项目会级联删除任务。
+- 任务创建、编辑、删除和看板拖动；支持状态、优先级、截止日期、搜索、筛选与排序。
+- 仪表盘显示当前用户任务统计与分布图表，可按本人项目过滤。
+- CSV 导出只包含当前用户的任务。
+- 其他用户的项目或任务不可访问；越权和不存在的资源都返回 `404`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/health` | 健康检查 |
+| `POST` | `/api/auth/register` | 注册 |
+| `POST` | `/api/auth/login` | 登录并签发 JWT |
+| `POST` | `/api/auth/logout` | 验证令牌并通知客户端退出 |
+| `GET` / `PATCH` | `/api/auth/me` | 读取或更新当前用户资料 |
+| `GET` / `POST` | `/api/projects` | 列出或创建项目 |
+| `GET` / `PATCH` / `DELETE` | `/api/projects/:projectId` | 查看、更新或删除项目 |
+| `GET` / `POST` | `/api/projects/:projectId/tasks` | 列出或创建项目任务 |
+| `GET` / `PATCH` / `DELETE` | `/api/tasks/:taskId` | 查看、更新或删除任务 |
+| `PATCH` | `/api/tasks/:taskId/status` | 更新任务状态和看板位置 |
+| `GET` | `/api/dashboard/stats` | 当前用户统计，可选 `projectId` |
+| `GET` | `/api/export/tasks.csv` | 下载当前用户任务 CSV |
+
+项目状态为 `active` / `archived`；任务状态为 `todo` / `in_progress` / `done`；优先级为 `low` / `medium` / `high`。日期接受 `YYYY-MM-DD` 或带时区的 ISO datetime。
+
+## 根目录命令
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm install` | 安装全部工作区依赖并生成 Prisma Client（npm 内置命令） |
+| `npm run dev` | 同时启动 API 和 Web 开发服务 |
+| `npm run build` | 构建 API 和 Web |
+| `npm run test` | 运行 API 与 Web Vitest 测试 |
+| `npm run test:e2e` | 运行 Playwright Chromium 冒烟测试 |
+| `npm run db:generate` | 生成 Prisma Client |
+| `npm run db:push` | 将 Prisma schema 同步到本地 SQLite |
+| `npm run db:migrate` | 使用 Prisma Migrate 创建或应用迁移 |
+| `npm run db:seed` | 写入演示数据；需要 `SEED_USER_PASSWORD` |
+
+## 测试
+
+运行构建和 Vitest：
 
 ```bash
-npm run dev        # 同时启动 API 和 Web
-npm run build      # 构建全部工作区
-npm run test       # 运行 Vitest 测试，包括真实 SQLite 认证接口测试
-npm run test:e2e   # 运行 Playwright 浏览器测试
-npm run db:generate
-npm run db:push    # 将 Prisma schema 同步到本地 SQLite
-npm run db:migrate # 使用 Prisma Migrate 创建/应用迁移
-npm run db:seed    # 插入本地演示数据（需要 SEED_USER_PASSWORD）
+npm run build
+npm run test
 ```
 
-首次运行端到端测试前，安装 Playwright 的 Chromium 浏览器：
+首次运行 Playwright 前安装 Chromium：
 
 ```bash
 npx playwright install chromium
+npm run test:e2e
 ```
 
-更完整的数据关系和安全边界见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+Linux 主机若缺少浏览器系统库，可运行 `npx playwright install --with-deps chromium` 安装 Playwright 所需依赖。当前 E2E 包含登录页未登录状态和仪表盘界面冒烟；仪表盘用例会 mock API，不验证真实 API/数据库链路。详细执行结果见 [TEST_REPORT.md](./TEST_REPORT.md)。
+
+认证令牌保存在浏览器 `localStorage` 的 `taskpilot.accessToken` 项中。该方式适合本地开发；生产部署应配置严格的 CSP 并落实 XSS 防护。当前服务尚未包含生产级速率限制、安全响应头和数据库备份流程。
+
+更完整的数据关系和接口边界见 [ARCHITECTURE.md](./ARCHITECTURE.md)，交付验收说明见 [DELIVERY_REPORT.md](./DELIVERY_REPORT.md)。

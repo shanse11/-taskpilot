@@ -1,57 +1,63 @@
 # TaskPilot 架构说明
 
-## 总体架构
+## 系统结构
 
-TaskPilot 使用 npm workspaces 管理一个前后端分离的 TypeScript monorepo。开发时浏览器访问 Vite，Vite 将 `/api` 请求代理到 Express；API 通过 Prisma 访问本地 SQLite 文件。无需付费第三方 API 或云服务即可开发和运行。
+TaskPilot 是由 npm workspaces 管理的 TypeScript monorepo。浏览器加载 Vite 提供的 React 应用，并通过 `/api` 请求访问 Express API；API 通过 Prisma Client 读写 SQLite。开发模式下 Vite 将 `/api` 代理到本地 API。
 
 ```mermaid
 flowchart LR
-  Browser[React + Tailwind 浏览器应用] -->|页面与静态资源| Vite[Vite 开发服务器]
-  Browser -->|/api 请求| Vite
-  Vite -->|代理 /api| Express[Express REST API]
-  Express --> Auth[认证与用户隔离中间件]
-  Auth --> Services[业务路由 / 服务]
-  Services --> Prisma[Prisma ORM]
-  Prisma --> SQLite[(本地 SQLite)]
+  Browser[React + Tailwind Web] -->|页面资源| Vite[Vite :5173]
+  Browser -->|/api| Vite
+  Vite -->|代理| Express[Express API :4000]
+  Express --> Auth[JWT 身份校验]
+  Auth --> Routes[认证、项目、任务、统计与导出路由]
+  Routes --> Prisma[Prisma Client]
+  Prisma --> SQLite[(apps/api/prisma/dev.db)]
 ```
 
-生产部署可以分别托管静态前端和 Node.js API，也可以由同一站点反向代理 `/api`。第一阶段以本地单机开发为目标。
+开发时可用 `npm run dev` 同时启动前后端。Vite 配置了严格端口 `5173`，API 默认端口为 `4000`，可通过 `PORT` 修改 API 端口。API CORS 默认允许 `http://localhost:5173`，并可通过 `CORS_ORIGIN` 增加逗号分隔的来源。
 
-## 目录结构
+## 代码目录
 
 ```text
 apps/
   api/
-    prisma/              Prisma schema、迁移与演示数据 seed
+    prisma/
+      schema.prisma          User、Project、Task 数据模型
+      migrations/            初始 SQLite migration
+      seed.ts                 演示账号、项目和任务
     src/
-      routes/            Express 路由入口与认证、项目、任务路由
-      middleware/        JWT 身份校验中间件
-      lib/               Prisma Client 单例
-      app.ts              Express 应用与中间件
-      index.ts            API 进程入口
-    .env.example          本地环境变量模板
+      routes/                 health、auth、projects、tasks、dashboard、export
+      middleware/auth.ts      JWT 签发和身份校验
+      lib/prisma.ts           Prisma Client 单例
+      app.ts                  Express、中间件和路由挂载
+      index.ts                API 进程入口及密钥检查
   web/
-    src/                  React 页面、Tailwind 样式与 Vitest 测试
-    tests/e2e/             Playwright 浏览器测试
-    vite.config.ts         Vite、Tailwind 和 API 开发代理
-ARCHITECTURE.md
-DEVELOPMENT_PLAN.md
+    src/
+      auth/                   前端登录态
+      components/             页面共享布局和对话框
+      lib/                    API 客户端
+      pages/                  项目列表、任务看板、仪表盘
+    tests/e2e/                Playwright 浏览器冒烟测试
+    vite.config.ts            Vite、Tailwind 和 API 代理
 README.md
-package.json              npm workspaces 与根目录命令
+ARCHITECTURE.md
+TEST_REPORT.md
+DELIVERY_REPORT.md
+package.json                 npm workspaces 与根目录命令
 ```
 
-前后端通过 `/api` HTTP 接口协作，不共享运行时模型。将来若需要共享 DTO 或校验规则，可在根目录增加 `packages/shared`，并由双方显式依赖。
+前后端只通过 HTTP/JSON API 通信，不共享运行时模型。SQLite 文件路径由 `apps/api/prisma/schema.prisma` 中的 `file:./dev.db` 决定。
 
-## 数据库模型
+## 数据模型
 
-Prisma schema 位于 `apps/api/prisma/schema.prisma`。所有模型使用 CUID 主键和创建/更新时间。User 是业务数据的归属者；Project 属于一个 User，Task 同时关联所属 User 和 Project。
+Prisma schema 位于 `apps/api/prisma/schema.prisma`。三个模型均使用 CUID 主键和创建/更新时间。
 
 ```mermaid
 erDiagram
   USER ||--o{ PROJECT : owns
   USER ||--o{ TASK : owns
   PROJECT ||--o{ TASK : contains
-
   USER {
     string id PK
     string email UK
@@ -84,62 +90,54 @@ erDiagram
   }
 ```
 
-| 模型 | 关键约束与字段 |
+| 模型 | 约束与行为 |
 | --- | --- |
-| `User` | `email` 唯一；仅存 `passwordHash`，不存密码明文。 |
-| `Project` | `userId` 指向拥有者；`status` 当前约定为 `active` / `archived`。 |
-| `Task` | `projectId` 与 `userId` 都必填；优先级为 `low` / `medium` / `high`，状态为 `todo` / `in_progress` / `done`。包含可空 `dueDate` 和整数 `position`。 |
+| `User` | `email` 唯一；只保存 bcrypt `passwordHash`，不保存密码明文。 |
+| `Project` | 归属一个 `User`；状态约定为 `active` 或 `archived`；按 `(id, userId)` 暴露复合唯一键。 |
+| `Task` | 同时关联 `Project` 和 `User`；`(projectId, userId)` 复合外键确保项目与任务属于同一用户；含优先级、状态、可空截止日期和看板位置。 |
 
-SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以 `String` 保存，并由 API 输入校验保证取值。Project 暴露 `(id, userId)` 复合唯一键，Task 通过 `(projectId, userId)` 外键指向它，避免任务归属用户与项目拥有者不一致；外键删除使用级联策略。
+SQLite 没有 Prisma 原生 enum 支持，因此状态和优先级以字符串存储，由 API 的 Zod schema 校验。任务状态为 `todo`、`in_progress`、`done`；优先级为 `low`、`medium`、`high`。用户、项目及任务关系均使用级联删除。
 
-### 用户数据隔离
+## API 路由
 
-- JWT 校验后只从可信 token subject 取得当前 `userId`，忽略请求体或查询参数中声称的用户 ID。
-- 用户拥有的 Project 查询始终带 `userId` 条件；Task 查询同时带 `userId`，需要项目上下文时也验证项目属于同一用户。
-- 创建 Task 时服务端从已授权项目推导 `userId`，不接受客户端决定归属。
-- 资源不存在或归属其他用户时统一返回 404，避免暴露其他用户数据是否存在。
-- 复合外键提供额外的数据完整性约束；业务查询仍需显式按用户过滤。
+业务接口挂载在 `/api` 下。除健康检查、注册和登录外，认证、项目、任务、统计和导出接口都要求 `Authorization: Bearer <token>`。
 
-## REST API 规划
-
-所有接口使用 `/api` 前缀，成功响应返回 JSON，认证接口除外的业务端点均要求 `Authorization: Bearer <access-token>`。
-
-| 方法 | 路径 | 用途 | 阶段 |
+| 方法 | 路径 | 认证 | 行为 |
 | --- | --- | --- | --- |
-| `GET` | `/api/health` | API 健康检查 | 已搭建 |
-| `POST` | `/api/auth/register` | 注册账号并返回安全用户资料 | 已实现 |
-| `POST` | `/api/auth/login` | 校验密码并签发访问令牌 | 已实现 |
-| `POST` | `/api/auth/logout` | 验证令牌，通知前端清除本地令牌 | 已实现 |
-| `GET` | `/api/auth/me` | 返回当前用户资料 | 已实现 |
-| `PATCH` | `/api/auth/me` | 更新当前用户姓名 | 已实现 |
-| `GET` | `/api/projects` | 列出当前用户项目，可按状态过滤 | 已实现 |
-| `POST` | `/api/projects` | 创建项目 | 已实现 |
-| `GET` | `/api/projects/:projectId` | 获取项目及任务状态摘要 | 已实现 |
-| `PATCH` | `/api/projects/:projectId` | 更新名称、描述或状态 | 已实现 |
-| `DELETE` | `/api/projects/:projectId` | 删除项目及其任务 | 已实现 |
-| `GET` | `/api/projects/:projectId/tasks` | 列出任务，支持状态、优先级、搜索与排序 | 已实现 |
-| `POST` | `/api/projects/:projectId/tasks` | 在项目中创建任务 | 已实现 |
-| `GET` | `/api/tasks/:taskId` | 获取当前用户任务 | 已实现 |
-| `PATCH` | `/api/tasks/:taskId` | 更新任务字段、状态或看板位置 | 已实现 |
-| `PATCH` | `/api/tasks/:taskId/status` | 更新看板状态与位置 | 已实现 |
-| `DELETE` | `/api/tasks/:taskId` | 删除任务 | 已实现 |
+| `GET` | `/api/health` | 否 | 返回 API 健康状态。 |
+| `POST` | `/api/auth/register` | 否 | 校验资料、哈希密码并创建账号。 |
+| `POST` | `/api/auth/login` | 否 | 校验密码并返回 JWT 和公开用户资料。 |
+| `POST` | `/api/auth/logout` | 是 | 验证令牌并返回 `204`；客户端清除本地令牌。 |
+| `GET` / `PATCH` | `/api/auth/me` | 是 | 读取当前用户资料或更新姓名。 |
+| `GET` / `POST` | `/api/projects` | 是 | 列出本人项目或创建项目；列表可按状态过滤。 |
+| `GET` / `PATCH` / `DELETE` | `/api/projects/:projectId` | 是 | 读取、更新或删除本人项目。 |
+| `GET` / `POST` | `/api/projects/:projectId/tasks` | 是 | 列出或创建本人项目中的任务。列表支持 `status`、`priority`、`q` 和 `sort`。 |
+| `GET` / `PATCH` / `DELETE` | `/api/tasks/:taskId` | 是 | 读取、更新或删除本人任务。 |
+| `PATCH` | `/api/tasks/:taskId/status` | 是 | 更新任务状态和看板位置。 |
+| `GET` | `/api/dashboard/stats` | 是 | 返回任务数、完成数、逾期数、完成率及状态/优先级分布；可传本人 `projectId`。 |
+| `GET` | `/api/export/tasks.csv` | 是 | 导出当前用户的全部任务及项目名。 |
 
-认证请求使用 Zod 校验。项目和任务路由都要求 JWT；未授权或不存在的资源统一返回 `404`，避免暴露其他用户资源是否存在。
+输入由 Zod 校验。项目和任务的读写始终包含当前 `userId` 条件；未找到或属于其他用户的资源统一返回 `404`，避免泄露资源存在性。创建任务时服务端根据已授权项目确定归属用户。
 
-## 鉴权和密码方案
+## 认证和数据安全
 
-- 注册时使用 `bcryptjs` 对密码做 bcrypt 哈希（cost factor 12），只将结果存入 `User.passwordHash`。登录使用 bcrypt compare，绝不返回哈希。
-- 登录成功后用 `jsonwebtoken` 签发 1 小时访问 JWT，subject 和 `userId` claim 为 User ID，并包含 `email`；签名密钥通过环境变量 `JWT_SECRET` 注入。生产环境缺少密钥时 API 拒绝启动。
-- Web 将 Bearer 访问令牌保存在 `localStorage`，页面启动时调用 `/api/auth/me` 恢复用户；纯 Bearer 退出由客户端删除令牌，服务端不维护令牌撤销表。
-- API 允许来自 `http://localhost:5173` 的跨域请求，并响应带凭据的 CORS 配置；Web 使用 `credentials: include` 发送请求，但当前认证仍只使用 Bearer token。
-- 初期 API 使用 Bearer token。后续若增加 refresh token，应使用随机高熵值并只保存其哈希，设置轮换、过期和撤销策略。
-- 认证中间件负责解析 JWT 并向请求上下文附加可信用户 ID；权限检查必须在每个资源读取和写入路径执行。
-- 当前 Web 使用 `localStorage` 保存访问令牌；生产部署应配置严格的 CSP 并持续防护 XSS。若改为 HttpOnly Cookie，需要同时设置 Secure、SameSite 和 CSRF 防护。
+- 注册密码使用 `bcryptjs` cost factor 12 哈希；密码不会出现在 API 响应中。
+- API 使用 HS256 JWT，包含 `userId`、`email` 和 `sub`，有效期为一小时。签名密钥来自 `JWT_SECRET`；密钥少于 32 个字符会被拒绝。生产模式没有设置密钥时 API 不会启动；开发模式可使用代码中的本地开发密钥。
+- Web 将令牌存入 `localStorage` 的 `taskpilot.accessToken`，刷新页面时通过 `/api/auth/me` 恢复登录态。当前为无状态 Bearer token：服务端不维护撤销表，退出时由客户端删除令牌。
+- API 对跨域请求校验来源；默认允许本地 Vite 地址，可通过 `CORS_ORIGIN` 配置额外来源。
+- `apps/api/.env`、SQLite 数据库文件、依赖和构建产物由 `.gitignore` 排除；`.env.example` 作为模板保留在仓库。
 
-## 功能实现顺序
+`localStorage` 令牌方案适合本地演示。生产部署还需根据目标环境配置 HTTPS、严格 CSP 和 XSS 防护；当前代码尚未实现生产级速率限制、安全响应头或数据库备份流程。
 
-1. 认证：注册、登录、JWT 中间件、当前用户接口和权限测试。已实现。
-2. 项目管理：按用户隔离的项目 CRUD、归档与级联删除。已实现。
-3. 任务管理：任务 CRUD、状态/优先级校验、截止日期、筛选和排序。已实现。
-4. Web 工作台：项目列表、三列看板、任务对话框、加载/空/错误状态。已实现。
-5. 下一步：仪表盘、图表、CSV 导出和发布加固。
+## Web 页面和测试边界
+
+- `/login`、`/register`：认证页面。
+- `/projects`：项目列表及项目创建、编辑、归档和删除。
+- `/projects/:projectId`：三列任务看板，可创建/编辑/删除任务，拖动改变状态和位置，并筛选、搜索和排序。
+- `/dashboard`：任务统计、状态和优先级分布图表，以及 CSV 下载入口。
+- Vitest API 测试通过 Supertest 调用 Express 应用，并用 Prisma/SQLite 验证认证、项目任务隔离及统计导出；Web Vitest 使用 jsdom。
+- Playwright 使用 Chromium。当前仪表盘 E2E 用例为 `/api/**` 请求提供 mock，仅覆盖前端路由和展示；它不覆盖真实登录、API 或数据库链路。执行记录见 `TEST_REPORT.md`。
+
+## 根目录命令
+
+`npm install` 是 npm 内置安装命令，不是自定义 `npm run` 脚本。根 `package.json` 提供 `dev`、`build`、`test`、`test:e2e`、`db:generate`、`db:push`、`db:migrate` 和 `db:seed`。本地完整步骤见 `README.md`。
